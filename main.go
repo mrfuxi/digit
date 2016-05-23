@@ -1,11 +1,16 @@
 package main
 
 import (
+	"fmt"
 	"image"
+	"os"
+	"path"
 
 	"github.com/llgcode/draw2d"
 	"github.com/llgcode/draw2d/draw2dimg"
 )
+
+var outDir = "out"
 
 func fontFileName(fontData draw2d.FontData) string {
 	return fontData.Name + ".ttf"
@@ -35,6 +40,21 @@ func main() {
 	draw2d.SetFontFolder("./fonts/")
 	draw2d.SetFontNamer(fontFileName)
 
-	digit := drawDigitsWithFont("8", "OpenSans-Regular", 14)
-	draw2dimg.SaveToPngFile("digits.png", digit)
+	os.RemoveAll(outDir)
+	if err := os.Mkdir(outDir, 0764); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	text := `123456789 +=\|/[]*-$#@`
+	for i, c := range text {
+		digit := drawDigitsWithFont(string(c), "OpenSans-Regular", 14)
+
+		fileName := fmt.Sprintf("char-%06d.png", i)
+		err := draw2dimg.SaveToPngFile(path.Join(outDir, fileName), digit)
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+	}
 }
