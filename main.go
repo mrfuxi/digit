@@ -21,7 +21,17 @@ func fontFileName(fontData draw2d.FontData) string {
 	return fontData.Name
 }
 
-func drawDigitsWithFont(char string, fontName string, fontSize float64) image.Image {
+func drawDigitsWithFont(char string, fontName string, fontSize float64) (img image.Image, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			var ok bool
+			err, ok = r.(error)
+			if !ok {
+				err = fmt.Errorf("pkg: %v", r)
+			}
+		}
+	}()
+
 	canvas := image.NewRGBA(image.Rect(0, 0, 28, 28))
 	gc := draw2dimg.NewGraphicContext(canvas)
 
@@ -38,7 +48,7 @@ func drawDigitsWithFont(char string, fontName string, fontSize float64) image.Im
 	center := 28.0 / 2
 	gc.FillStringAt(char, center-width/2, center+height/2)
 
-	return canvas
+	return canvas, nil
 }
 
 func main() {
@@ -60,22 +70,26 @@ func main() {
 	text := `123456789 +=\|/[]*-$#@`
 	fontSizes := []float64{10, 14, 16, 18, 20, 22, 24, 26}
 
-	cnt := 0
+	cnt := 1
 	for _, font := range fontFiles {
 		if filepath.Ext(font.Name()) != ".ttf" {
 			continue
 		}
 		for _, c := range text {
 			for _, fontSize := range fontSizes {
-				cnt++
-				digit := drawDigitsWithFont(string(c), font.Name(), fontSize)
+				digit, err := drawDigitsWithFont(string(c), font.Name(), fontSize)
+				if err != nil {
+					fmt.Println(font.Name(), string(c), fontSize, err)
+					continue
+				}
 
 				fileName := fmt.Sprintf("char-%06d.png", cnt)
-				err := draw2dimg.SaveToPngFile(path.Join(outDir, fileName), digit)
+				err = draw2dimg.SaveToPngFile(path.Join(outDir, fileName), digit)
 				if err != nil {
 					fmt.Println(err)
 					os.Exit(1)
 				}
+				cnt++
 			}
 		}
 	}
