@@ -21,7 +21,7 @@ func fontFileName(fontData draw2d.FontData) string {
 	return fontData.Name
 }
 
-func drawDigitsWithFont(char string, fontName string, fontSize float64) (img image.Image, err error) {
+func drawDigitsWithFont(char, fontName string, fontSize, dx, dy float64) (img image.Image, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			var ok bool
@@ -46,7 +46,7 @@ func drawDigitsWithFont(char string, fontName string, fontSize float64) (img ima
 	width := right - left
 
 	center := 28.0 / 2
-	gc.FillStringAt(char, center-width/2, center+height/2)
+	gc.FillStringAt(char, center-width/2+dx, center+height/2+dy)
 
 	return canvas, nil
 }
@@ -77,19 +77,24 @@ func main() {
 		}
 		for _, c := range text {
 			for _, fontSize := range fontSizes {
-				digit, err := drawDigitsWithFont(string(c), font.Name(), fontSize)
-				if err != nil {
-					fmt.Println(font.Name(), string(c), fontSize, err)
-					continue
-				}
+				for dx := -4; dx <= 4; dx += 2 {
+					for dy := -4; dy <= 4; dy += 2 {
 
-				fileName := fmt.Sprintf("char-%06d.png", cnt)
-				err = draw2dimg.SaveToPngFile(path.Join(outDir, fileName), digit)
-				if err != nil {
-					fmt.Println(err)
-					os.Exit(1)
+						digit, err := drawDigitsWithFont(string(c), font.Name(), fontSize, float64(dx), float64(dy))
+						if err != nil {
+							fmt.Println(font.Name(), string(c), fontSize, err)
+							continue
+						}
+
+						fileName := fmt.Sprintf("char-%06d.png", cnt)
+						err = draw2dimg.SaveToPngFile(path.Join(outDir, fileName), digit)
+						if err != nil {
+							fmt.Println(err)
+							os.Exit(1)
+						}
+						cnt++
+					}
 				}
-				cnt++
 			}
 		}
 	}
