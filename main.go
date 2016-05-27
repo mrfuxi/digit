@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"image"
 	"io/ioutil"
@@ -17,8 +18,23 @@ var (
 	fontDir = "fonts"
 )
 
+// ErrFont is returned when font could not be loaded, therfore it could not be used
+var ErrFont = errors.New("Font issue")
+
 func fontFileName(fontData draw2d.FontData) string {
 	return fontData.Name
+}
+
+func verifyFont(fontName string) error {
+	fontData := draw2d.FontData{Name: fontName}
+
+	canvas := image.NewRGBA(image.Rect(0, 0, 1, 1))
+	gc := draw2dimg.NewGraphicContext(canvas)
+	gc.SetFontData(fontData)
+	if draw2d.GetFont(fontData) == nil {
+		return ErrFont
+	}
+	return nil
 }
 
 func drawDigitsWithFont(char, fontName string, fontSize, dx, dy float64) (img image.Image, err error) {
@@ -38,7 +54,8 @@ func drawDigitsWithFont(char, fontName string, fontSize, dx, dy float64) (img im
 	gc.DrawImage(image.White)    // Background color
 	gc.SetFillColor(image.Black) // Text color
 
-	gc.SetFontData(draw2d.FontData{Name: fontName})
+	fontData := draw2d.FontData{Name: fontName}
+	gc.SetFontData(fontData)
 	gc.SetFontSize(fontSize)
 
 	left, top, right, bottom := gc.GetStringBounds(char)
@@ -75,10 +92,15 @@ func main() {
 		if filepath.Ext(font.Name()) != ".ttf" {
 			continue
 		}
+		if err := verifyFont(font.Name()); err != nil {
+			fmt.Println(err, font.Name())
+			continue
+		}
+
 		for _, c := range text {
 			for _, fontSize := range fontSizes {
-				for dx := -4; dx <= 4; dx += 2 {
-					for dy := -4; dy <= 4; dy += 2 {
+				for dx := -4; dx <= 4; dx += 4 {
+					for dy := -4; dy <= 4; dy += 4 {
 
 						digit, err := drawDigitsWithFont(string(c), font.Name(), fontSize, float64(dx), float64(dy))
 						if err != nil {
