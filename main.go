@@ -21,6 +21,14 @@ var (
 // ErrFont is returned when font could not be loaded, therfore it could not be used
 var ErrFont = errors.New("Font issue")
 
+type DrawDirections struct {
+	Char     string
+	FontName string
+	FontSize float64
+	Dx       float64
+	Dy       float64
+}
+
 func fontFileName(fontData draw2d.FontData) string {
 	return fontData.Name
 }
@@ -37,7 +45,7 @@ func verifyFont(fontName string) error {
 	return nil
 }
 
-func drawDigitsWithFont(char, fontName string, fontSize, dx, dy float64) (img image.Image, err error) {
+func draw(directions DrawDirections) (img image.Image, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			var ok bool
@@ -54,29 +62,26 @@ func drawDigitsWithFont(char, fontName string, fontSize, dx, dy float64) (img im
 	gc.DrawImage(image.White)    // Background color
 	gc.SetFillColor(image.Black) // Text color
 
-	fontData := draw2d.FontData{Name: fontName}
-	gc.SetFontData(fontData)
-	gc.SetFontSize(fontSize)
+	gc.SetFontData(draw2d.FontData{Name: directions.FontName})
+	gc.SetFontSize(directions.FontSize)
 
-	left, top, right, bottom := gc.GetStringBounds(char)
+	left, top, right, bottom := gc.GetStringBounds(directions.Char)
 	height := bottom - top
 	width := right - left
 
 	center := 28.0 / 2
-	gc.FillStringAt(char, center-width/2+dx, center+height/2+dy)
+	gc.FillStringAt(directions.Char, center-width/2+directions.Dx, center+height/2+directions.Dy)
 
 	return canvas, nil
 }
 
-func main() {
+func prepareDrawDirections(directions chan<- DrawDirections) {
+	text := `123456789 +=\|/[]*-$#@`
+	fontSizes := []float64{10, 14, 16, 18, 20, 22, 24, 26}
+	movements := []float64{-4, 0, 4}
+
 	draw2d.SetFontFolder(fontDir)
 	draw2d.SetFontNamer(fontFileName)
-
-	os.RemoveAll(outDir)
-	if err := os.Mkdir(outDir, 0764); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
 
 	fontFiles, err := ioutil.ReadDir(fontDir)
 	if err != nil {
@@ -84,10 +89,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	text := `123456789 +=\|/[]*-$#@`
-	fontSizes := []float64{10, 14, 16, 18, 20, 22, 24, 26}
-
-	cnt := 1
 	for _, font := range fontFiles {
 		if filepath.Ext(font.Name()) != ".ttf" {
 			continue
@@ -99,25 +100,47 @@ func main() {
 
 		for _, c := range text {
 			for _, fontSize := range fontSizes {
-				for dx := -4; dx <= 4; dx += 4 {
-					for dy := -4; dy <= 4; dy += 4 {
-
-						digit, err := drawDigitsWithFont(string(c), font.Name(), fontSize, float64(dx), float64(dy))
-						if err != nil {
-							fmt.Println(font.Name(), string(c), fontSize, err)
-							continue
+				for _, dx := range movements {
+					for _, dy := range movements {
+						directions <- DrawDirections{
+							Char:     string(c),
+							FontName: font.Name(),
+							FontSize: fontSize,
+							Dx:       dx,
+							Dy:       dy,
 						}
-
-						fileName := fmt.Sprintf("char-%06d.png", cnt)
-						err = draw2dimg.SaveToPngFile(path.Join(outDir, fileName), digit)
-						if err != nil {
-							fmt.Println(err)
-							os.Exit(1)
-						}
-						cnt++
 					}
 				}
 			}
 		}
+	}
+
+}
+
+func main() {
+	os.RemoveAll(outDir)
+	if err := os.Mkdir(outDir, 0764); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	directions := make(chan DrawDirections, 1)
+	go prepareDrawDirections(directions)
+
+	cnt := 1
+	for direction := range directions {
+		digit, err := draw(direction)
+		if err != nil {
+			fmt.Println(direction.FontName, direction.Char, direction.FontSize, err)
+			continue
+		}
+
+		fileName := fmt.Sprintf("char-%06d.png", cnt)
+		err = draw2dimg.SaveToPngFile(path.Join(outDir, fileName), digit)
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+		cnt++
 	}
 }
