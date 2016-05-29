@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sync"
 
 	"github.com/llgcode/draw2d"
 	"github.com/llgcode/draw2d/draw2dimg"
@@ -45,7 +46,23 @@ func verifyFont(fontName string) error {
 	return nil
 }
 
-func draw(directions DrawDirections) (img image.Image, err error) {
+func RoutineMaster(count int, worker func(), finalizer func()) {
+	wg := sync.WaitGroup{}
+	for i := 0; i < count; i++ {
+		wg.Add(1)
+		go func() {
+			worker()
+			wg.Done()
+		}()
+	}
+
+	go func() {
+		wg.Wait()
+		finalizer()
+	}()
+}
+
+func drawDigit(directions DrawDirections) (img image.Image, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			var ok bool
@@ -75,6 +92,21 @@ func draw(directions DrawDirections) (img image.Image, err error) {
 	return canvas, nil
 }
 
+func draw(directions <-chan DrawDirections, images chan<- image.Image) {
+	for {
+		direction, ok := <-directions
+		if !ok {
+			break
+		}
+		digit, err := drawDigit(direction)
+		if err != nil {
+			fmt.Println(direction.FontName, direction.Char, direction.FontSize, err)
+			continue
+		}
+		images <- digit
+	}
+}
+
 func prepareDrawDirections(directions chan<- DrawDirections) {
 	text := `123456789 +=\|/[]*-$#@`
 	fontSizes := []float64{10, 14, 16, 18, 20, 22, 24, 26}
@@ -89,6 +121,7 @@ func prepareDrawDirections(directions chan<- DrawDirections) {
 		os.Exit(1)
 	}
 
+	var fonts []string
 	for _, font := range fontFiles {
 		if filepath.Ext(font.Name()) != ".ttf" {
 			continue
@@ -97,14 +130,17 @@ func prepareDrawDirections(directions chan<- DrawDirections) {
 			fmt.Println(err, font.Name())
 			continue
 		}
+		fonts = append(fonts, font.Name())
+	}
 
+	for _, font := range fonts {
 		for _, c := range text {
 			for _, fontSize := range fontSizes {
 				for _, dx := range movements {
 					for _, dy := range movements {
 						directions <- DrawDirections{
 							Char:     string(c),
-							FontName: font.Name(),
+							FontName: font,
 							FontSize: fontSize,
 							Dx:       dx,
 							Dy:       dy,
@@ -114,7 +150,6 @@ func prepareDrawDirections(directions chan<- DrawDirections) {
 			}
 		}
 	}
-
 }
 
 func main() {
@@ -124,20 +159,16 @@ func main() {
 		os.Exit(1)
 	}
 
-	directions := make(chan DrawDirections, 1)
-	go prepareDrawDirections(directions)
+	directions := make(chan DrawDirections, 100)
+	images := make(chan image.Image, 10000)
+
+	RoutineMaster(1, func() { prepareDrawDirections(directions) }, func() { close(directions) })
+	RoutineMaster(4, func() { draw(directions, images) }, func() { close(images) })
 
 	cnt := 1
-	for direction := range directions {
-		digit, err := draw(direction)
-		if err != nil {
-			fmt.Println(direction.FontName, direction.Char, direction.FontSize, err)
-			continue
-		}
-
+	for digit := range images {
 		fileName := fmt.Sprintf("char-%06d.png", cnt)
-		err = draw2dimg.SaveToPngFile(path.Join(outDir, fileName), digit)
-		if err != nil {
+		if err := draw2dimg.SaveToPngFile(path.Join(outDir, fileName), digit); err != nil {
 			fmt.Println(err)
 			os.Exit(1)
 		}
