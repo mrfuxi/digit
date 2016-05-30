@@ -30,6 +30,11 @@ type DrawDirections struct {
 	Dy       float64
 }
 
+type Counter struct {
+	Image image.Image
+	Id    int
+}
+
 func fontFileName(fontData draw2d.FontData) string {
 	return fontData.Name
 }
@@ -152,6 +157,23 @@ func prepareDrawDirections(directions chan<- DrawDirections) {
 	}
 }
 
+func imgCouter(images <-chan image.Image, counters chan<- Counter) {
+	cnt := 1
+	for img := range images {
+		counters <- Counter{img, cnt}
+		cnt++
+	}
+}
+
+func imgSaver(counters <-chan Counter) {
+	for counter := range counters {
+		fileName := fmt.Sprintf("char-%06d.png", counter.Id)
+		if err := draw2dimg.SaveToPngFile(path.Join(outDir, fileName), counter.Image); err != nil {
+			fmt.Println(err)
+		}
+	}
+}
+
 func main() {
 	os.RemoveAll(outDir)
 	if err := os.Mkdir(outDir, 0764); err != nil {
@@ -160,18 +182,16 @@ func main() {
 	}
 
 	directions := make(chan DrawDirections, 100)
-	images := make(chan image.Image, 10000)
+	images := make(chan image.Image, 100)
+	counters := make(chan Counter, 100)
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
 
 	RoutineMaster(1, func() { prepareDrawDirections(directions) }, func() { close(directions) })
 	RoutineMaster(4, func() { draw(directions, images) }, func() { close(images) })
+	RoutineMaster(1, func() { imgCouter(images, counters) }, func() { close(counters) })
+	RoutineMaster(4, func() { imgSaver(counters) }, func() { wg.Done() })
 
-	cnt := 1
-	for digit := range images {
-		fileName := fmt.Sprintf("char-%06d.png", cnt)
-		if err := draw2dimg.SaveToPngFile(path.Join(outDir, fileName), digit); err != nil {
-			fmt.Println(err)
-			os.Exit(1)
-		}
-		cnt++
-	}
+	wg.Wait()
 }
