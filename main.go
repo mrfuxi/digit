@@ -8,31 +8,62 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"sync"
 
 	"github.com/llgcode/draw2d"
 	"github.com/llgcode/draw2d/draw2dimg"
+	"github.com/petar/GoMNIST"
 )
 
+type FType int
+
+const (
+	FTypeMachine FType = 1 << iota
+	FTypeHand
+	FTypeTrueHand
+)
+
+type fontMap struct {
+	name  string
+	ftype FType
+}
+
 var (
-	outDir  = "out"
-	fontDir = "fonts"
+	outDir      = "out"
+	mnistDir    = "mnist"
+	fontDir     = "fonts"
+	fontSubDirs = []fontMap{
+		{"hand", FTypeHand},
+		{"machine", FTypeMachine},
+	}
 )
 
 // ErrFont is returned when font could not be loaded, therfore it could not be used
 var ErrFont = errors.New("Font issue")
+var ErrSize = errors.New("Char to big")
+
+type CharInfo struct {
+	Char string
+	Type FType
+}
 
 type DrawDirections struct {
-	Char     string
+	CharInfo
 	FontName string
 	FontSize float64
 	Dx       float64
 	Dy       float64
 }
 
-type Counter struct {
+type Image struct {
+	CharInfo
 	Image image.Image
-	Id    int
+}
+
+type Counter struct {
+	Image
+	ID int
 }
 
 func fontFileName(fontData draw2d.FontData) string {
@@ -51,7 +82,7 @@ func verifyFont(fontName string) error {
 	return nil
 }
 
-func RoutineMaster(count int, worker func(), finalizer func()) {
+func RoutineRunner(count int, async bool, worker func(), finalizer func()) {
 	wg := sync.WaitGroup{}
 	for i := 0; i < count; i++ {
 		wg.Add(1)
@@ -61,10 +92,18 @@ func RoutineMaster(count int, worker func(), finalizer func()) {
 		}()
 	}
 
-	go func() {
+	fun := func() {
 		wg.Wait()
-		finalizer()
-	}()
+		if finalizer != nil {
+			finalizer()
+		}
+	}
+
+	if async {
+		go fun()
+	} else {
+		fun()
+	}
 }
 
 func drawDigit(directions DrawDirections) (img image.Image, err error) {
@@ -81,8 +120,8 @@ func drawDigit(directions DrawDirections) (img image.Image, err error) {
 	canvas := image.NewRGBA(image.Rect(0, 0, 28, 28))
 	gc := draw2dimg.NewGraphicContext(canvas)
 
-	gc.DrawImage(image.White)    // Background color
-	gc.SetFillColor(image.Black) // Text color
+	gc.DrawImage(image.Black)    // Background color
+	gc.SetFillColor(image.White) // Text color
 
 	gc.SetFontData(draw2d.FontData{Name: directions.FontName})
 	gc.SetFontSize(directions.FontSize)
@@ -91,13 +130,17 @@ func drawDigit(directions DrawDirections) (img image.Image, err error) {
 	height := bottom - top
 	width := right - left
 
+	if height > 28 {
+		return nil, ErrSize
+	}
+
 	center := 28.0 / 2
 	gc.FillStringAt(directions.Char, center-width/2+directions.Dx, center+height/2+directions.Dy)
 
 	return canvas, nil
 }
 
-func draw(directions <-chan DrawDirections, images chan<- image.Image) {
+func draw(directions <-chan DrawDirections, images chan<- Image) {
 	for {
 		direction, ok := <-directions
 		if !ok {
@@ -108,34 +151,41 @@ func draw(directions <-chan DrawDirections, images chan<- image.Image) {
 			fmt.Println(direction.FontName, direction.Char, direction.FontSize, err)
 			continue
 		}
-		images <- digit
+		images <- Image{
+			CharInfo: direction.CharInfo,
+			Image:    digit,
+		}
 	}
 }
 
 func prepareDrawDirections(directions chan<- DrawDirections) {
-	text := `123456789 +=\|/[]*-$#@`
-	fontSizes := []float64{10, 14, 16, 18, 20, 22, 24, 26}
+	text := `0123456789 +=\|/[]*-$#@`
+	text := `0123456789`
+	fontSizes := []float64{14, 16, 18, 20, 22, 24, 26}
 	movements := []float64{-4, 0, 4}
 
 	draw2d.SetFontFolder(fontDir)
 	draw2d.SetFontNamer(fontFileName)
 
-	fontFiles, err := ioutil.ReadDir(fontDir)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
+	var fonts []fontMap
+	for _, fontSubDir := range fontSubDirs {
+		fontSubDirPath := path.Join(fontDir, fontSubDir.name)
+		fontFiles, err := ioutil.ReadDir(fontSubDirPath)
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
 
-	var fonts []string
-	for _, font := range fontFiles {
-		if filepath.Ext(font.Name()) != ".ttf" {
-			continue
+		for _, font := range fontFiles {
+			fontPath := path.Join(fontSubDir.name, font.Name())
+			if filepath.Ext(fontPath) != ".ttf" {
+				continue
+			} else if err := verifyFont(fontPath); err != nil {
+				fmt.Println(err, fontPath)
+				continue
+			}
+			fonts = append(fonts, fontMap{fontPath, fontSubDir.ftype})
 		}
-		if err := verifyFont(font.Name()); err != nil {
-			fmt.Println(err, font.Name())
-			continue
-		}
-		fonts = append(fonts, font.Name())
 	}
 
 	for _, font := range fonts {
@@ -144,8 +194,11 @@ func prepareDrawDirections(directions chan<- DrawDirections) {
 				for _, dx := range movements {
 					for _, dy := range movements {
 						directions <- DrawDirections{
-							Char:     string(c),
-							FontName: font,
+							CharInfo: CharInfo{
+								Char: string(c),
+								Type: font.ftype,
+							},
+							FontName: font.name,
 							FontSize: fontSize,
 							Dx:       dx,
 							Dy:       dy,
@@ -157,19 +210,50 @@ func prepareDrawDirections(directions chan<- DrawDirections) {
 	}
 }
 
-func imgCouter(images <-chan image.Image, counters chan<- Counter) {
+func imgCouter(images <-chan Image, counters chan<- Counter) {
 	cnt := 1
 	for img := range images {
-		counters <- Counter{img, cnt}
+		counters <- Counter{
+			Image: img,
+			ID:    cnt,
+		}
 		cnt++
 	}
 }
 
 func imgSaver(counters <-chan Counter) {
 	for counter := range counters {
-		fileName := fmt.Sprintf("char-%06d.png", counter.Id)
-		if err := draw2dimg.SaveToPngFile(path.Join(outDir, fileName), counter.Image); err != nil {
+		fileName := fmt.Sprintf("char-%06d-%v.png", counter.ID, counter.Char)
+		if err := draw2dimg.SaveToPngFile(path.Join(outDir, fileName), counter.Image.Image); err != nil {
 			fmt.Println(err)
+		}
+	}
+}
+
+func drawMnist(images chan<- Image) {
+	train, test, err := GoMNIST.Load(mnistDir)
+	if err != nil {
+		panic(err)
+	}
+
+	for i := 0; i < train.Count(); i++ {
+		img, label := train.Get(i)
+		images <- Image{
+			CharInfo: CharInfo{
+				Char: strconv.Itoa(int(label)),
+				Type: FTypeTrueHand,
+			},
+			Image: img,
+		}
+	}
+	for i := 0; i < test.Count(); i++ {
+		img, label := train.Get(i)
+		images <- Image{
+			CharInfo: CharInfo{
+				Char: strconv.Itoa(int(label)),
+				Type: FTypeTrueHand,
+			},
+			Image: img,
 		}
 	}
 }
@@ -182,16 +266,19 @@ func main() {
 	}
 
 	directions := make(chan DrawDirections, 100)
-	images := make(chan image.Image, 100)
+	images := make(chan Image, 100)
 	counters := make(chan Counter, 100)
 
-	wg := sync.WaitGroup{}
-	wg.Add(1)
+	wgProducer := sync.WaitGroup{}
+	wgProducer.Add(2)
+	go func() {
+		wgProducer.Wait()
+		close(images)
+	}()
 
-	RoutineMaster(1, func() { prepareDrawDirections(directions) }, func() { close(directions) })
-	RoutineMaster(4, func() { draw(directions, images) }, func() { close(images) })
-	RoutineMaster(1, func() { imgCouter(images, counters) }, func() { close(counters) })
-	RoutineMaster(4, func() { imgSaver(counters) }, func() { wg.Done() })
-
-	wg.Wait()
+	RoutineRunner(1, true, func() { prepareDrawDirections(directions) }, func() { close(directions) })
+	RoutineRunner(4, true, func() { draw(directions, images) }, func() { wgProducer.Done() })
+	RoutineRunner(1, true, func() { drawMnist(images) }, func() { wgProducer.Done() })
+	RoutineRunner(1, true, func() { imgCouter(images, counters) }, func() { close(counters) })
+	RoutineRunner(4, false, func() { imgSaver(counters) }, nil)
 }
