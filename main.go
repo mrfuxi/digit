@@ -1,10 +1,13 @@
 package main
 
 import (
+	"encoding/gob"
 	"errors"
 	"fmt"
 	"image"
+	"image/color"
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"path"
 	"path/filepath"
@@ -44,8 +47,9 @@ var ErrFont = errors.New("Font issue")
 var ErrSize = errors.New("Char to big")
 
 type CharInfo struct {
-	Char string
-	Type FType
+	Char  string
+	Type  FType
+	Train bool
 }
 
 type DrawDirections struct {
@@ -159,7 +163,7 @@ func draw(directions <-chan DrawDirections, images chan<- Image) {
 }
 
 func prepareDrawDirections(directions chan<- DrawDirections) {
-	text := `0123456789 +=\|/[]*-$#@`
+	// text := `0123456789 +=\|/[]*-$#@`
 	text := `0123456789`
 	fontSizes := []float64{14, 16, 18, 20, 22, 24, 26}
 	movements := []float64{-4, 0, 4}
@@ -195,8 +199,9 @@ func prepareDrawDirections(directions chan<- DrawDirections) {
 					for _, dy := range movements {
 						directions <- DrawDirections{
 							CharInfo: CharInfo{
-								Char: string(c),
-								Type: font.ftype,
+								Char:  string(c),
+								Type:  font.ftype,
+								Train: rand.Intn(100) >= 5,
 							},
 							FontName: font.name,
 							FontSize: fontSize,
@@ -230,6 +235,52 @@ func imgSaver(counters <-chan Counter) {
 	}
 }
 
+func gobSaver(counters <-chan Counter) {
+	csvFileTrain, err := os.Create(path.Join(outDir, "train.dat"))
+	if err != nil {
+		panic(err)
+	}
+	defer csvFileTrain.Close()
+
+	csvFileTest, err := os.Create(path.Join(outDir, "test.dat"))
+	if err != nil {
+		panic(err)
+	}
+	defer csvFileTest.Close()
+
+	train := gob.NewEncoder(csvFileTrain)
+	test := gob.NewEncoder(csvFileTest)
+
+	type Record struct {
+		Pic  [28 * 28]uint8
+		Char string
+		Type uint8
+	}
+
+	for counter := range counters {
+		bounds := counter.Image.Image.Bounds()
+		record := Record{
+			Char: counter.CharInfo.Char,
+			Type: uint8(counter.CharInfo.Type),
+		}
+
+		pos := 0
+		for x := 0; x < bounds.Max.X; x++ {
+			for y := 0; y < bounds.Max.Y; y++ {
+				clr := counter.Image.Image.At(x, y)
+				grayColor := color.GrayModel.Convert(clr).(color.Gray)
+				record.Pic[pos] = grayColor.Y
+				pos++
+			}
+		}
+		if counter.CharInfo.Train {
+			train.Encode(record)
+		} else {
+			test.Encode(record)
+		}
+	}
+}
+
 func drawMnist(images chan<- Image) {
 	train, test, err := GoMNIST.Load(mnistDir)
 	if err != nil {
@@ -240,8 +291,9 @@ func drawMnist(images chan<- Image) {
 		img, label := train.Get(i)
 		images <- Image{
 			CharInfo: CharInfo{
-				Char: strconv.Itoa(int(label)),
-				Type: FTypeTrueHand,
+				Char:  strconv.Itoa(int(label)),
+				Type:  FTypeTrueHand,
+				Train: true,
 			},
 			Image: img,
 		}
@@ -250,8 +302,9 @@ func drawMnist(images chan<- Image) {
 		img, label := train.Get(i)
 		images <- Image{
 			CharInfo: CharInfo{
-				Char: strconv.Itoa(int(label)),
-				Type: FTypeTrueHand,
+				Char:  strconv.Itoa(int(label)),
+				Type:  FTypeTrueHand,
+				Train: false,
 			},
 			Image: img,
 		}
@@ -280,5 +333,6 @@ func main() {
 	RoutineRunner(4, true, func() { draw(directions, images) }, func() { wgProducer.Done() })
 	RoutineRunner(1, true, func() { drawMnist(images) }, func() { wgProducer.Done() })
 	RoutineRunner(1, true, func() { imgCouter(images, counters) }, func() { close(counters) })
-	RoutineRunner(4, false, func() { imgSaver(counters) }, nil)
+	// RoutineRunner(4, false, func() { imgSaver(counters) }, nil)
+	RoutineRunner(1, false, func() { gobSaver(counters) }, nil)
 }
