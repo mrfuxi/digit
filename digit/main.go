@@ -7,7 +7,6 @@ import (
 	"io"
 	"log"
 	"os"
-	"runtime/pprof"
 	"strconv"
 	"time"
 
@@ -30,7 +29,6 @@ type Record struct {
 func prepareMnistData(r io.Reader) (examples []neural.TrainExample) {
 	dec := gob.NewDecoder(r)
 
-	i := 0
 	for {
 		tmp := Record{}
 		err := dec.Decode(&tmp)
@@ -59,7 +57,6 @@ func prepareMnistData(r io.Reader) (examples []neural.TrainExample) {
 		}
 		example.Output[label] = 1
 		examples = append(examples, example)
-		i++
 	}
 	return
 }
@@ -95,9 +92,37 @@ func epocheCallback(nn neural.Evaluator, cost neural.Cost, validationData, testD
 	}
 }
 
-func main() {
-	trainData, validationData, testData := loadTestData()
+func load(fileName string, nn neural.Evaluator) {
+	if fileName == "" {
+		return
+	}
 
+	fn, err := os.Open(*nnLoadFile)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+	if err := neural.Load(nn, fn); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+}
+
+func save(fileName string, nn neural.Evaluator) {
+	if fileName == "" {
+		return
+	}
+
+	fn, err := os.OpenFile(*nnSaveFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	if err := neural.Save(nn, fn); err != nil {
+		log.Fatalln(err)
+	}
+}
+
+func buildNN() neural.Evaluator {
 	activator := neural.NewSigmoidActivator()
 	outActivator := neural.NewSoftmaxActivator()
 	nn := neural.NewNeuralNetwork(
@@ -105,27 +130,12 @@ func main() {
 		neural.NewFullyConnectedLayer(activator),
 		neural.NewFullyConnectedLayer(outActivator),
 	)
+	return nn
+}
 
-	flag.Parse()
-
-	if *nnLoadFile != "" {
-		fn, err := os.Open(*nnLoadFile)
-		if err != nil {
-			log.Fatalln(err)
-		}
-		if err := neural.Load(nn, fn); err != nil {
-			log.Fatalln(err)
-		}
-	}
-
-	if *cpuprofile != "" {
-		f, err := os.Create(*cpuprofile)
-		if err != nil {
-			log.Fatal(err)
-		}
-		pprof.StartCPUProfile(f)
-		defer pprof.StopCPUProfile()
-	}
+func runTraining(nn neural.Evaluator) {
+	fmt.Println("Loading train data")
+	trainData, validationData, testData := loadTestData()
 
 	cost := neural.NewLogLikelihoodCost()
 	options := neural.TrainOptions{
@@ -139,19 +149,19 @@ func main() {
 		Cost:           cost,
 	}
 
+	fmt.Println("Start training")
+
 	t0 := time.Now()
 	neural.Train(nn, trainData, options)
 	dt := time.Since(t0)
 
 	fmt.Println("Training complete in", dt)
+}
 
-	if *nnSaveFile != "" {
-		fn, err := os.OpenFile(*nnSaveFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
-		if err != nil {
-			log.Fatalln(err)
-		}
-		if err := neural.Save(nn, fn); err != nil {
-			log.Fatalln(err)
-		}
-	}
+func main() {
+	flag.Parse()
+	nn := buildNN()
+	load(*nnLoadFile, nn)
+	runTraining(nn)
+	save(*nnSaveFile, nn)
 }
