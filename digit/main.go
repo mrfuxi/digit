@@ -2,22 +2,20 @@ package main
 
 import (
 	"encoding/gob"
-	"flag"
+	"errors"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"strconv"
 	"time"
 
 	"github.com/mrfuxi/neural"
+	"github.com/mrfuxi/neural/mat"
+	"github.com/urfave/cli"
 )
 
 var (
-	cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
-	nnSaveFile = flag.String("save-file", "", "Save neural network to file")
-	nnLoadFile = flag.String("load-file", "", "Load neural network to file")
-	inputSize  = 28 * 28
+	inputSize = 28 * 28
 )
 
 type Record struct {
@@ -61,24 +59,27 @@ func prepareMnistData(r io.Reader) (examples []neural.TrainExample) {
 	return
 }
 
-func loadTestData() ([]neural.TrainExample, []neural.TrainExample, []neural.TrainExample) {
+func loadTrainData() ([]neural.TrainExample, []neural.TrainExample) {
 	trainFile, err := os.Open("train.dat")
 	if err != nil {
 		panic(err)
 	}
 	defer trainFile.Close()
+	tmp := prepareMnistData(trainFile)
+	trainData := tmp[:len(tmp)-10000]
+	validationData := tmp[len(tmp)-10000:]
+	return trainData, validationData
+}
 
+func loadTestData() []neural.TrainExample {
 	testFile, err := os.Open("test.dat")
 	if err != nil {
 		panic(err)
 	}
 	defer testFile.Close()
 
-	tmp := prepareMnistData(trainFile)
-	trainData := tmp[:len(tmp)-10000]
-	validationData := tmp[len(tmp)-10000:]
 	testData := prepareMnistData(testFile)
-	return trainData, validationData, testData
+	return testData
 }
 
 func epocheCallback(nn neural.Evaluator, cost neural.Cost, validationData, testData []neural.TrainExample) neural.EpocheCallback {
@@ -92,34 +93,28 @@ func epocheCallback(nn neural.Evaluator, cost neural.Cost, validationData, testD
 	}
 }
 
-func load(fileName string, nn neural.Evaluator) {
+func load(fileName string, nn neural.Evaluator) error {
 	if fileName == "" {
-		return
+		return nil
 	}
 
-	fn, err := os.Open(*nnLoadFile)
+	fn, err := os.Open(fileName)
 	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		return err
 	}
-	if err := neural.Load(nn, fn); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
+	return neural.Load(nn, fn)
 }
 
-func save(fileName string, nn neural.Evaluator) {
+func save(fileName string, nn neural.Evaluator) error {
 	if fileName == "" {
-		return
+		return nil
 	}
 
-	fn, err := os.OpenFile(*nnSaveFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
+	fn, err := os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
 	if err != nil {
-		log.Fatalln(err)
+		return err
 	}
-	if err := neural.Save(nn, fn); err != nil {
-		log.Fatalln(err)
-	}
+	return neural.Save(nn, fn)
 }
 
 func buildNN() neural.Evaluator {
@@ -135,7 +130,8 @@ func buildNN() neural.Evaluator {
 
 func runTraining(nn neural.Evaluator) {
 	fmt.Println("Loading train data")
-	trainData, validationData, testData := loadTestData()
+	testData := loadTestData()
+	trainData, validationData := loadTrainData()
 
 	cost := neural.NewLogLikelihoodCost()
 	options := neural.TrainOptions{
@@ -158,10 +154,72 @@ func runTraining(nn neural.Evaluator) {
 	fmt.Println("Training complete in", dt)
 }
 
+func validate(nn neural.Evaluator) {
+	testData := loadTestData()
+	var different float64
+
+	for _, sample := range testData {
+		output := nn.Evaluate(sample.Input)
+
+		if mat.ArgMax(output) != mat.ArgMax(sample.Output) {
+			different++
+		}
+	}
+
+	errorRate := different / float64(len(testData))
+	fmt.Printf("Error rate: %.2f%%\n", errorRate*100)
+}
+
 func main() {
-	flag.Parse()
 	nn := buildNN()
-	load(*nnLoadFile, nn)
-	runTraining(nn)
-	save(*nnSaveFile, nn)
+	loaded := false
+
+	app := cli.NewApp()
+	app.Flags = []cli.Flag{
+		cli.StringFlag{
+			Name:  "input, i",
+			Usage: "Load network from `FILE`",
+		},
+	}
+	app.Before = func(c *cli.Context) error {
+		fn := c.GlobalString("input")
+		err := load(fn, nn)
+		if fn != "" && err == nil {
+			loaded = true
+		}
+		return err
+	}
+	app.Commands = []cli.Command{
+		{
+			Name:  "train",
+			Usage: "Run training on the network",
+			Flags: []cli.Flag{
+				cli.StringFlag{
+					Name:  "output, o",
+					Usage: "Save network to `FILE`",
+				},
+			},
+			After: func(c *cli.Context) error {
+				return save(c.String("output"), nn)
+			},
+			Action: func(c *cli.Context) error {
+				runTraining(nn)
+				return nil
+			},
+		},
+		{
+			Name:  "validate",
+			Usage: "Run validation on test data",
+			Action: func(c *cli.Context) error {
+				if !loaded {
+					return errors.New("Neural network not loaded. Nothing to validate")
+				}
+
+				validate(nn)
+				return nil
+			},
+		},
+	}
+
+	app.Run(os.Args)
 }
