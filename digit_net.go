@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/gob"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -11,7 +10,6 @@ import (
 
 	"github.com/mrfuxi/neural"
 	"github.com/mrfuxi/neural/mat"
-	"github.com/urfave/cli"
 )
 
 var (
@@ -60,7 +58,7 @@ func prepareMnistData(r io.Reader) (examples []neural.TrainExample) {
 }
 
 func loadTrainData() ([]neural.TrainExample, []neural.TrainExample) {
-	trainFile, err := os.Open("train.dat")
+	trainFile, err := os.Open("out/train.dat")
 	if err != nil {
 		panic(err)
 	}
@@ -72,7 +70,7 @@ func loadTrainData() ([]neural.TrainExample, []neural.TrainExample) {
 }
 
 func loadTestData() []neural.TrainExample {
-	testFile, err := os.Open("test.dat")
+	testFile, err := os.Open("out/test.dat")
 	if err != nil {
 		panic(err)
 	}
@@ -168,58 +166,4 @@ func validate(nn neural.Evaluator) {
 
 	errorRate := different / float64(len(testData))
 	fmt.Printf("Error rate: %.2f%%\n", errorRate*100)
-}
-
-func main() {
-	nn := buildNN()
-	loaded := false
-
-	app := cli.NewApp()
-	app.Flags = []cli.Flag{
-		cli.StringFlag{
-			Name:  "input, i",
-			Usage: "Load network from `FILE`",
-		},
-	}
-	app.Before = func(c *cli.Context) error {
-		fn := c.GlobalString("input")
-		err := load(fn, nn)
-		if fn != "" && err == nil {
-			loaded = true
-		}
-		return err
-	}
-	app.Commands = []cli.Command{
-		{
-			Name:  "train",
-			Usage: "Run training on the network",
-			Flags: []cli.Flag{
-				cli.StringFlag{
-					Name:  "output, o",
-					Usage: "Save network to `FILE`",
-				},
-			},
-			After: func(c *cli.Context) error {
-				return save(c.String("output"), nn)
-			},
-			Action: func(c *cli.Context) error {
-				runTraining(nn)
-				return nil
-			},
-		},
-		{
-			Name:  "validate",
-			Usage: "Run validation on test data",
-			Action: func(c *cli.Context) error {
-				if !loaded {
-					return errors.New("Neural network not loaded. Nothing to validate")
-				}
-
-				validate(nn)
-				return nil
-			},
-		},
-	}
-
-	app.Run(os.Args)
 }

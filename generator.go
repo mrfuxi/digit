@@ -311,11 +311,10 @@ func drawMnist(images chan<- Image) {
 	}
 }
 
-func main() {
+func generatData() error {
 	os.RemoveAll(outDir)
 	if err := os.Mkdir(outDir, 0764); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		return err
 	}
 
 	directions := make(chan DrawDirections, 100)
@@ -335,4 +334,6 @@ func main() {
 	RoutineRunner(1, true, func() { imgCouter(images, counters) }, func() { close(counters) })
 	// RoutineRunner(4, false, func() { imgSaver(counters) }, nil)
 	RoutineRunner(1, false, func() { gobSaver(counters) }, nil)
+
+	return nil
 }
