@@ -16,12 +16,6 @@ var (
 	inputSize = 28 * 28
 )
 
-type Record struct {
-	Pic  [28 * 28]uint8
-	Char string
-	Type uint8
-}
-
 func prepareMnistData(r io.Reader) (examples []neural.TrainExample) {
 	dec := gob.NewDecoder(r)
 
@@ -58,7 +52,7 @@ func prepareMnistData(r io.Reader) (examples []neural.TrainExample) {
 }
 
 func loadTrainData() ([]neural.TrainExample, []neural.TrainExample) {
-	trainFile, err := os.Open("out/train.dat")
+	trainFile, err := os.Open(trainFile)
 	if err != nil {
 		panic(err)
 	}
@@ -70,7 +64,7 @@ func loadTrainData() ([]neural.TrainExample, []neural.TrainExample) {
 }
 
 func loadTestData() []neural.TrainExample {
-	testFile, err := os.Open("out/test.dat")
+	testFile, err := os.Open(testFile)
 	if err != nil {
 		panic(err)
 	}

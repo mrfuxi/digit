@@ -1,10 +1,13 @@
 package main
 
 import (
+	"errors"
 	"os"
 
 	"github.com/urfave/cli"
 )
+
+var ErrInputMissing = errors.New("Input file missing")
 
 func main() {
 	nn := buildNN()
@@ -48,6 +51,12 @@ func main() {
 				{
 					Name:  "validate",
 					Usage: "Run validation on test data",
+					Before: func(c *cli.Context) error {
+						if c.String("input") == "" {
+							return ErrInputMissing
+						}
+						return nil
+					},
 					Action: func(c *cli.Context) error {
 						validate(nn)
 						return nil

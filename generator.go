@@ -19,7 +19,7 @@ import (
 	"github.com/petar/GoMNIST"
 )
 
-type FType int
+type FType uint8
 
 const (
 	FTypeMachine FType = 1 << iota
@@ -34,6 +34,8 @@ type fontMap struct {
 
 var (
 	outDir      = "out"
+	testFile    = path.Join(outDir, "test.dat")
+	trainFile   = path.Join(outDir, "train.dat")
 	mnistDir    = "mnist"
 	fontDir     = "fonts"
 	fontSubDirs = []fontMap{
@@ -68,6 +70,12 @@ type Image struct {
 type Counter struct {
 	Image
 	ID int
+}
+
+type Record struct {
+	Pic  [28 * 28]uint8
+	Char string
+	Type FType
 }
 
 func fontFileName(fontData draw2d.FontData) string {
@@ -236,13 +244,13 @@ func imgSaver(counters <-chan Counter) {
 }
 
 func gobSaver(counters <-chan Counter) {
-	csvFileTrain, err := os.Create(path.Join(outDir, "train.dat"))
+	csvFileTrain, err := os.Create(trainFile)
 	if err != nil {
 		panic(err)
 	}
 	defer csvFileTrain.Close()
 
-	csvFileTest, err := os.Create(path.Join(outDir, "test.dat"))
+	csvFileTest, err := os.Create(testFile)
 	if err != nil {
 		panic(err)
 	}
@@ -251,17 +259,11 @@ func gobSaver(counters <-chan Counter) {
 	train := gob.NewEncoder(csvFileTrain)
 	test := gob.NewEncoder(csvFileTest)
 
-	type Record struct {
-		Pic  [28 * 28]uint8
-		Char string
-		Type uint8
-	}
-
 	for counter := range counters {
 		bounds := counter.Image.Image.Bounds()
 		record := Record{
 			Char: counter.CharInfo.Char,
-			Type: uint8(counter.CharInfo.Type),
+			Type: counter.CharInfo.Type,
 		}
 
 		pos := 0
