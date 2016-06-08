@@ -172,7 +172,8 @@ func draw(directions <-chan DrawDirections, images chan<- Image) {
 
 func prepareDrawDirections(directions chan<- DrawDirections) {
 	// text := `0123456789 +=\|/[]*-$#@`
-	text := `0123456789`
+	// text := `0123456789`
+	text := ` 123456789`
 	fontSizes := []float64{14, 16, 18, 20, 22, 24, 26}
 	movements := []float64{-4, 0, 4}
 

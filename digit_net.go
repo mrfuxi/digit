@@ -30,7 +30,7 @@ func prepareMnistData(r io.Reader) (examples []neural.TrainExample) {
 		image := tmp.Pic
 		label, err := strconv.Atoi(tmp.Char)
 		if err != nil {
-			panic(err)
+			label = 0
 		}
 
 		example := neural.TrainExample{
