@@ -47,6 +47,7 @@ var (
 // ErrFont is returned when font could not be loaded, therfore it could not be used
 var ErrFont = errors.New("Font issue")
 var ErrSize = errors.New("Char to big")
+var ErrNoText = errors.New("Text missing")
 
 type CharInfo struct {
 	Char  string
@@ -170,10 +171,7 @@ func draw(directions <-chan DrawDirections, images chan<- Image) {
 	}
 }
 
-func prepareDrawDirections(directions chan<- DrawDirections) {
-	// text := `0123456789 +=\|/[]*-$#@`
-	// text := `0123456789`
-	text := ` 123456789`
+func prepareDrawDirections(text string, directions chan<- DrawDirections) {
 	fontSizes := []float64{14, 16, 18, 20, 22, 24, 26}
 	movements := []float64{-4, 0, 4}
 
@@ -314,7 +312,11 @@ func drawMnist(images chan<- Image) {
 	}
 }
 
-func generatData() error {
+func generatData(text string) error {
+	if text == "" {
+		return ErrNoText
+	}
+
 	os.RemoveAll(outDir)
 	if err := os.Mkdir(outDir, 0764); err != nil {
 		return err
@@ -331,7 +333,7 @@ func generatData() error {
 		close(images)
 	}()
 
-	RoutineRunner(1, true, func() { prepareDrawDirections(directions) }, func() { close(directions) })
+	RoutineRunner(1, true, func() { prepareDrawDirections(text, directions) }, func() { close(directions) })
 	RoutineRunner(4, true, func() { draw(directions, images) }, func() { wgProducer.Done() })
 	RoutineRunner(1, true, func() { drawMnist(images) }, func() { wgProducer.Done() })
 	RoutineRunner(1, true, func() { imgCouter(images, counters) }, func() { close(counters) })

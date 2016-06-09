@@ -10,54 +10,57 @@ import (
 var ErrInputMissing = errors.New("Input file missing")
 
 func main() {
-	nn := buildNN()
-
 	app := cli.NewApp()
 	app.Commands = []cli.Command{
 		{
 			Name:  "net",
 			Usage: "Training and validating network",
-			Flags: []cli.Flag{
-				cli.StringFlag{
-					Name:  "input, i",
-					Usage: "Load network from `FILE`",
-				},
-			},
-			Before: func(c *cli.Context) error {
-				err := load(c.String("input"), nn)
-				if err != nil {
-					return err
-				}
-				return err
-			},
 			Subcommands: []cli.Command{
 				{
 					Name:  "train",
 					Usage: "Run training on the network",
 					Flags: []cli.Flag{
 						cli.StringFlag{
+							Name:  "input, i",
+							Usage: "Load network from `FILE`",
+						},
+						cli.StringFlag{
 							Name:  "output, o",
 							Usage: "Save network to `FILE`",
 						},
 					},
-					After: func(c *cli.Context) error {
-						return save(c.String("output"), nn)
-					},
 					Action: func(c *cli.Context) error {
+						nn := buildNN()
+
+						err := load(c.String("input"), nn)
+						if err != nil {
+							return err
+						}
+
 						runTraining(nn)
+						save(c.String("output"), nn)
 						return nil
 					},
 				},
 				{
 					Name:  "validate",
 					Usage: "Run validation on test data",
-					Before: func(c *cli.Context) error {
+					Flags: []cli.Flag{
+						cli.StringFlag{
+							Name:  "input, i",
+							Usage: "Load network from `FILE`",
+						},
+					},
+					Action: func(c *cli.Context) error {
+						nn := buildNN()
 						if c.String("input") == "" {
 							return ErrInputMissing
 						}
-						return nil
-					},
-					Action: func(c *cli.Context) error {
+
+						if err := load(c.String("input"), nn); err != nil {
+							return err
+						}
+
 						validate(nn)
 						return nil
 					},
@@ -68,7 +71,8 @@ func main() {
 			Name:  "gen",
 			Usage: "Generating train and test data",
 			Action: func(c *cli.Context) error {
-				return generatData()
+				text := c.Args().First()
+				return generatData(text)
 			},
 		},
 	}
