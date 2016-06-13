@@ -39,7 +39,7 @@ func prepareMnistData(r io.Reader) (examples []neural.TrainExample) {
 		}
 
 		for j, pix := range image {
-			example.Input[j] = (float64(pix) / 255)
+			example.Input[j] = (float64(pix)/255)*0.9 + 0.1
 		}
 
 		for j := range example.Output {
@@ -127,7 +127,7 @@ func runTraining(nn neural.Evaluator) {
 
 	cost := neural.NewLogLikelihoodCost()
 	options := neural.TrainOptions{
-		Epochs:         50,
+		Epochs:         20,
 		MiniBatchSize:  10,
 		LearningRate:   0.01,
 		Regularization: 2,

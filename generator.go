@@ -19,6 +19,8 @@ import (
 	"github.com/petar/GoMNIST"
 )
 
+const ImageSize = 28
+
 type FType uint8
 
 const (
@@ -74,7 +76,7 @@ type Counter struct {
 }
 
 type Record struct {
-	Pic  [28 * 28]uint8
+	Pic  [ImageSize * ImageSize]uint8
 	Char string
 	Type FType
 }
@@ -130,7 +132,7 @@ func drawDigit(directions DrawDirections) (img image.Image, err error) {
 		}
 	}()
 
-	canvas := image.NewRGBA(image.Rect(0, 0, 28, 28))
+	canvas := image.NewRGBA(image.Rect(0, 0, ImageSize, ImageSize))
 	gc := draw2dimg.NewGraphicContext(canvas)
 
 	gc.DrawImage(image.Black)    // Background color
@@ -143,14 +145,23 @@ func drawDigit(directions DrawDirections) (img image.Image, err error) {
 	height := bottom - top
 	width := right - left
 
-	if height > 28 {
-		return nil, ErrSize
-	}
-
-	center := 28.0 / 2
+	center := ImageSize / 2.0
 	gc.FillStringAt(directions.Char, center-width/2+directions.Dx, center+height/2+directions.Dy)
 
+	for i := 0; i < ImageSize; i++ {
+
+		if grayAt(canvas, i, 0) > 0 || grayAt(canvas, i, ImageSize-1) > 0 || grayAt(canvas, 0, i) > 0 || grayAt(canvas, ImageSize-1, i) > 0 {
+			return nil, ErrSize
+		}
+	}
+
 	return canvas, nil
+}
+
+func grayAt(src image.Image, x, y int) uint8 {
+	srcColor := src.At(x, y)
+	dstColor := color.GrayModel.Convert(srcColor).(color.Gray)
+	return dstColor.Y
 }
 
 func draw(directions <-chan DrawDirections, images chan<- Image) {
