@@ -16,6 +16,7 @@ import (
 
 	"github.com/llgcode/draw2d"
 	"github.com/llgcode/draw2d/draw2dimg"
+	"github.com/mrfuxi/digit/common"
 	"github.com/petar/GoMNIST"
 )
 
@@ -95,30 +96,6 @@ func verifyFont(fontName string) error {
 		return ErrFont
 	}
 	return nil
-}
-
-func RoutineRunner(count int, async bool, worker func(), finalizer func()) {
-	wg := sync.WaitGroup{}
-	for i := 0; i < count; i++ {
-		wg.Add(1)
-		go func() {
-			worker()
-			wg.Done()
-		}()
-	}
-
-	fun := func() {
-		wg.Wait()
-		if finalizer != nil {
-			finalizer()
-		}
-	}
-
-	if async {
-		go fun()
-	} else {
-		fun()
-	}
 }
 
 func drawDigit(directions DrawDirections) (img image.Image, err error) {
@@ -344,12 +321,12 @@ func generatData(text string) error {
 		close(images)
 	}()
 
-	RoutineRunner(1, true, func() { prepareDrawDirections(text, directions) }, func() { close(directions) })
-	RoutineRunner(4, true, func() { draw(directions, images) }, func() { wgProducer.Done() })
-	RoutineRunner(1, true, func() { drawMnist(images) }, func() { wgProducer.Done() })
-	RoutineRunner(1, true, func() { imgCouter(images, counters) }, func() { close(counters) })
-	// RoutineRunner(4, false, func() { imgSaver(counters) }, nil)
-	RoutineRunner(1, false, func() { gobSaver(counters) }, nil)
+	common.RoutineRunner(1, true, func() { prepareDrawDirections(text, directions) }, func() { close(directions) })
+	common.RoutineRunner(4, true, func() { draw(directions, images) }, func() { wgProducer.Done() })
+	common.RoutineRunner(1, true, func() { drawMnist(images) }, func() { wgProducer.Done() })
+	common.RoutineRunner(1, true, func() { imgCouter(images, counters) }, func() { close(counters) })
+	// common.RoutineRunner(4, false, func() { imgSaver(counters) }, nil)
+	common.RoutineRunner(1, false, func() { gobSaver(counters) }, nil)
 
 	return nil
 }

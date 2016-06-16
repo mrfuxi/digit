@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 
+	"github.com/mrfuxi/digit/grid"
 	"github.com/urfave/cli"
 )
 
@@ -70,9 +71,22 @@ func main() {
 		{
 			Name:  "gen",
 			Usage: "Generating train and test data",
-			Action: func(c *cli.Context) error {
-				text := c.Args().First()
-				return generatData(text)
+			Subcommands: []cli.Command{
+				{
+					Name:  "digit",
+					Usage: "Digits",
+					Action: func(c *cli.Context) error {
+						text := c.Args().First()
+						return generatData(text)
+					},
+				},
+				{
+					Name:  "grid",
+					Usage: "Fragments of grid",
+					Action: func(c *cli.Context) error {
+						return grid.GenerateSudoku()
+					},
+				},
 			},
 		},
 	}
