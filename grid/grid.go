@@ -29,6 +29,10 @@ type GridInfo struct {
 
 type DrawDirections struct {
 	GridInfo
+	DStartAngle float64
+	DDiffAngle  float64
+	Dx          float64
+	Dy          float64
 }
 type Image struct {
 	GridInfo
@@ -41,7 +45,7 @@ type Counter struct {
 }
 
 var (
-	outDir    = path.Join("out")
+	outDir    = path.Join("out_grid")
 	TestFile  = path.Join(outDir, "test.dat")
 	TrainFile = path.Join(outDir, "train.dat")
 )
@@ -54,12 +58,39 @@ func prepareDrawDirections(directions chan<- DrawDirections) {
 		EdgeTypeCornerSW,
 	}
 
+	xyMovements := []float64{}
+	for d := 0.0; d <= ImageSize/4.0; d += 2.0 {
+		xyMovements = append(xyMovements, d)
+		if d != 0 {
+			xyMovements = append(xyMovements, -d)
+		}
+	}
+	dAngle := []float64{}
+	for d := 0.0; d <= 15; d += 5 {
+		dAngle = append(dAngle, d, -d)
+		if d != 0 {
+			dAngle = append(dAngle, -d)
+		}
+	}
+
 	for _, corner := range corners {
-		directions <- DrawDirections{
-			GridInfo: GridInfo{
-				Fragment: corner,
-				Train:    true,
-			},
+		for _, ds := range dAngle {
+			for _, dd := range dAngle {
+				for _, dx := range xyMovements {
+					for _, dy := range xyMovements {
+						directions <- DrawDirections{
+							GridInfo: GridInfo{
+								Fragment: corner,
+								Train:    true,
+							},
+							DStartAngle: ds,
+							DDiffAngle:  dd,
+							Dx:          dx,
+							Dy:          dy,
+						}
+					}
+				}
+			}
 		}
 	}
 
@@ -126,7 +157,10 @@ func drawFragment(directions DrawDirections) (img image.Image, err error) {
 		startAngle = 270
 	}
 
-	gc.Translate(center, center)
+	startAngle += directions.DStartAngle
+	diffAngle += directions.DDiffAngle
+
+	gc.Translate(center+directions.Dx, center+directions.Dy)
 	gc.Rotate(startAngle * math.Pi / 180.0)
 
 	gc.MoveTo(0, 0)
