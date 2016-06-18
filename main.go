@@ -84,7 +84,7 @@ func main() {
 					Name:  "grid",
 					Usage: "Fragments of grid",
 					Action: func(c *cli.Context) error {
-						return grid.GenerateSudoku()
+						return grid.GenerateSudokuGrid()
 					},
 				},
 			},

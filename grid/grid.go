@@ -13,17 +13,21 @@ import (
 
 const ImageSize = 50
 
-type EdgeType uint8
+type FragmentType uint8
 
 const (
-	EdgeTypeCornerNW EdgeType = 1 << iota
-	EdgeTypeCornerNE
-	EdgeTypeCornerSE
-	EdgeTypeCornerSW
+	FragmentTypeCornerNW FragmentType = 1 << iota
+	FragmentTypeCornerNE
+	FragmentTypeCornerSE
+	FragmentTypeCornerSW
+	FragmentTypeEdgeN
+	FragmentTypeEdgeE
+	FragmentTypeEdgeS
+	FragmentTypeEdgeW
 )
 
 type GridInfo struct {
-	Fragment EdgeType
+	Fragment FragmentType
 	Train    bool
 }
 
@@ -50,12 +54,44 @@ var (
 	TrainFile = path.Join(outDir, "train.dat")
 )
 
+func IsCorner(fragment FragmentType) bool {
+	switch fragment {
+	case FragmentTypeCornerNW:
+		return true
+	case FragmentTypeCornerNE:
+		return true
+	case FragmentTypeCornerSE:
+		return true
+	case FragmentTypeCornerSW:
+		return true
+	}
+	return false
+}
+
+func IsEdge(fragment FragmentType) bool {
+	switch fragment {
+	case FragmentTypeEdgeN:
+		return true
+	case FragmentTypeEdgeE:
+		return true
+	case FragmentTypeEdgeS:
+		return true
+	case FragmentTypeEdgeW:
+		return true
+	}
+	return false
+}
+
 func prepareDrawDirections(directions chan<- DrawDirections) {
-	corners := []EdgeType{
-		EdgeTypeCornerNW,
-		EdgeTypeCornerNE,
-		EdgeTypeCornerSE,
-		EdgeTypeCornerSW,
+	fragments := []FragmentType{
+		FragmentTypeCornerNW,
+		FragmentTypeCornerNE,
+		FragmentTypeCornerSE,
+		FragmentTypeCornerSW,
+		FragmentTypeEdgeN,
+		FragmentTypeEdgeE,
+		FragmentTypeEdgeS,
+		FragmentTypeEdgeW,
 	}
 
 	xyMovements := []float64{}
@@ -73,14 +109,14 @@ func prepareDrawDirections(directions chan<- DrawDirections) {
 		}
 	}
 
-	for _, corner := range corners {
+	for _, fragment := range fragments {
 		for _, ds := range dAngle {
 			for _, dd := range dAngle {
 				for _, dx := range xyMovements {
 					for _, dy := range xyMovements {
 						directions <- DrawDirections{
 							GridInfo: GridInfo{
-								Fragment: corner,
+								Fragment: fragment,
 								Train:    true,
 							},
 							DStartAngle: ds,
@@ -147,13 +183,22 @@ func drawFragment(directions DrawDirections) (img image.Image, err error) {
 	var startAngle float64
 	var diffAngle float64 = 90
 	switch directions.Fragment {
-	case EdgeTypeCornerNW:
+	case FragmentTypeCornerNW:
 		startAngle = 0
-	case EdgeTypeCornerNE:
+	case FragmentTypeCornerNE:
 		startAngle = 90
-	case EdgeTypeCornerSE:
+	case FragmentTypeCornerSE:
 		startAngle = 180
-	case EdgeTypeCornerSW:
+	case FragmentTypeCornerSW:
+		startAngle = 270
+
+	case FragmentTypeEdgeN:
+		startAngle = 0
+	case FragmentTypeEdgeE:
+		startAngle = 90
+	case FragmentTypeEdgeS:
+		startAngle = 180
+	case FragmentTypeEdgeW:
 		startAngle = 270
 	}
 
@@ -163,7 +208,12 @@ func drawFragment(directions DrawDirections) (img image.Image, err error) {
 	gc.Translate(center+directions.Dx, center+directions.Dy)
 	gc.Rotate(startAngle * math.Pi / 180.0)
 
-	gc.MoveTo(0, 0)
+	if IsCorner(directions.Fragment) {
+		gc.MoveTo(0, 0)
+	} else {
+		gc.MoveTo(-ImageSize, 0)
+	}
+
 	gc.LineTo(ImageSize, 0)
 	gc.Close()
 	gc.FillStroke()
@@ -178,20 +228,20 @@ func drawFragment(directions DrawDirections) (img image.Image, err error) {
 	return canvas, nil
 }
 
-func GenerateSudoku() error {
+func GenerateSudokuGrid() error {
 	os.RemoveAll(outDir)
 	if err := os.Mkdir(outDir, 0764); err != nil {
 		return err
 	}
 
-	directions := make(chan DrawDirections, 1)
-	images := make(chan Image, 1)
-	counters := make(chan Counter, 1)
+	directions := make(chan DrawDirections, 1000)
+	images := make(chan Image, 100)
+	counters := make(chan Counter, 100)
 
 	common.RoutineRunner(1, true, func() { prepareDrawDirections(directions) }, func() { close(directions) })
 	common.RoutineRunner(4, true, func() { draw(directions, images) }, func() { close(images) })
 	common.RoutineRunner(1, true, func() { imgCouter(images, counters) }, func() { close(counters) })
-	common.RoutineRunner(1, false, func() { imgSaver(counters) }, nil)
+	common.RoutineRunner(4, false, func() { imgSaver(counters) }, nil)
 
 	return nil
 }
