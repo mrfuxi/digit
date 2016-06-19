@@ -9,6 +9,7 @@ import (
 
 	"github.com/llgcode/draw2d/draw2dimg"
 	"github.com/mrfuxi/digit/common"
+	"gopkg.in/cheggaaa/pb.v1"
 )
 
 const ImageSize = 50
@@ -52,6 +53,10 @@ var (
 	outDir    = path.Join("out_grid")
 	TestFile  = path.Join(outDir, "test.dat")
 	TrainFile = path.Join(outDir, "train.dat")
+)
+
+var (
+	progress *pb.ProgressBar
 )
 
 func IsCorner(fragment FragmentType) bool {
@@ -108,6 +113,8 @@ func prepareDrawDirections(directions chan<- DrawDirections) {
 			dAngle = append(dAngle, -d)
 		}
 	}
+
+	progress = pb.StartNew(len(fragments) * len(dAngle) * len(dAngle) * len(xyMovements) * len(xyMovements))
 
 	for _, fragment := range fragments {
 		for _, ds := range dAngle {
@@ -167,6 +174,7 @@ func imgSaver(counters <-chan Counter) {
 		if err := draw2dimg.SaveToPngFile(path.Join(outDir, fileName), counter.Image.Image); err != nil {
 			fmt.Println(err)
 		}
+		progress.Increment()
 	}
 }
 
