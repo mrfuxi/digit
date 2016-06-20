@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image"
 	"math"
+	"math/rand"
 	"os"
 	"path"
 
@@ -17,7 +18,7 @@ const ImageSize = 50
 type FragmentType uint8
 
 const (
-	FragmentTypeCornerNW FragmentType = 1 << iota
+	FragmentTypeCornerNW FragmentType = iota
 	FragmentTypeCornerNE
 	FragmentTypeCornerSE
 	FragmentTypeCornerSW
@@ -25,11 +26,23 @@ const (
 	FragmentTypeEdgeE
 	FragmentTypeEdgeS
 	FragmentTypeEdgeW
+	FragmentTypeCross
+	FragmentTypeEmpty
+)
+
+type FragmentSuperType uint8
+
+const (
+	FragmentSuperTypeCorner FragmentSuperType = iota
+	FragmentSuperTypeEdge
+	FragmentSuperTypeCross
+	FragmentSuperTypeEmpty
 )
 
 type GridInfo struct {
-	Fragment FragmentType
-	Train    bool
+	Fragment      FragmentType
+	FragmentSuper FragmentSuperType
+	Train         bool
 }
 
 type DrawDirections struct {
@@ -87,6 +100,29 @@ func IsEdge(fragment FragmentType) bool {
 	return false
 }
 
+func IsCross(fragment FragmentType) bool {
+	return fragment == FragmentTypeCross
+}
+
+func IsEmpty(fragment FragmentType) bool {
+	return fragment == FragmentTypeEmpty
+}
+
+func FragmentTypeToSuper(fragment FragmentType) FragmentSuperType {
+	switch {
+	case IsCorner(fragment):
+		return FragmentSuperTypeCorner
+	case IsEdge(fragment):
+		return FragmentSuperTypeEdge
+	case IsCross(fragment):
+		return FragmentSuperTypeCross
+	case IsEmpty(fragment):
+		return FragmentSuperTypeEmpty
+	default:
+		panic("What is this?")
+	}
+}
+
 func prepareDrawDirections(directions chan<- DrawDirections) {
 	fragments := []FragmentType{
 		FragmentTypeCornerNW,
@@ -97,6 +133,8 @@ func prepareDrawDirections(directions chan<- DrawDirections) {
 		FragmentTypeEdgeE,
 		FragmentTypeEdgeS,
 		FragmentTypeEdgeW,
+		FragmentTypeCross,
+		FragmentTypeEmpty,
 	}
 
 	xyMovements := []float64{}
@@ -123,8 +161,9 @@ func prepareDrawDirections(directions chan<- DrawDirections) {
 					for _, dy := range xyMovements {
 						directions <- DrawDirections{
 							GridInfo: GridInfo{
-								Fragment: fragment,
-								Train:    true,
+								Fragment:      fragment,
+								FragmentSuper: FragmentTypeToSuper(fragment),
+								Train:         rand.Intn(100) >= 5,
 							},
 							DStartAngle: ds,
 							DDiffAngle:  dd,
@@ -182,6 +221,11 @@ func drawFragment(directions DrawDirections) (img image.Image, err error) {
 	center := ImageSize / 2.0
 
 	canvas := image.NewRGBA(image.Rect(0, 0, ImageSize, ImageSize))
+
+	if IsEmpty(directions.Fragment) {
+		return canvas, nil
+	}
+
 	gc := draw2dimg.NewGraphicContext(canvas)
 
 	gc.DrawImage(image.Black)      // Background color
@@ -228,7 +272,11 @@ func drawFragment(directions DrawDirections) (img image.Image, err error) {
 
 	gc.Rotate(diffAngle * math.Pi / 180.0)
 
-	gc.MoveTo(0, 0)
+	if IsCross(directions.Fragment) {
+		gc.LineTo(-ImageSize, 0)
+	} else {
+		gc.MoveTo(0, 0)
+	}
 	gc.LineTo(ImageSize, 0)
 	gc.Close()
 	gc.FillStroke()
