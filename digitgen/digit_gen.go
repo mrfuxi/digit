@@ -1,4 +1,4 @@
-package main
+package digitgen
 
 import (
 	"encoding/gob"
@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"sync"
+
+	"gopkg.in/cheggaaa/pb.v1"
 
 	"github.com/llgcode/draw2d"
 	"github.com/llgcode/draw2d/draw2dimg"
@@ -36,18 +38,17 @@ type fontMap struct {
 }
 
 var (
-	outDir      = "out"
-	testFile    = path.Join(outDir, "test.dat")
-	trainFile   = path.Join(outDir, "train.dat")
-	mnistDir    = "mnist"
-	fontDir     = "fonts"
+	outDir      = "out_digit"
+	TestFile    = path.Join(outDir, "digit_test.dat")
+	TrainFile   = path.Join(outDir, "digit_train.dat")
+	mnistDir    = path.Join("digitgen", "mnist")
+	fontDir     = path.Join("digitgen", "fonts")
 	fontSubDirs = []fontMap{
 		{"hand", FTypeHand},
 		{"machine", FTypeMachine},
 	}
 )
 
-// ErrFont is returned when font could not be loaded, therfore it could not be used
 var ErrFont = errors.New("Font issue")
 var ErrSize = errors.New("Char to big")
 var ErrNoText = errors.New("Text missing")
@@ -81,6 +82,10 @@ type Record struct {
 	Char string
 	Type FType
 }
+
+var (
+	progress *pb.ProgressBar
+)
 
 func fontFileName(fontData draw2d.FontData) string {
 	return fontData.Name
@@ -149,7 +154,8 @@ func draw(directions <-chan DrawDirections, images chan<- Image) {
 		}
 		digit, err := drawDigit(direction)
 		if err != nil {
-			fmt.Println(direction.FontName, direction.Char, direction.FontSize, err)
+			progress.Increment()
+			// fmt.Println(direction.FontName, direction.Char, direction.FontSize, err)
 			continue
 		}
 		images <- Image{
@@ -186,6 +192,9 @@ func prepareDrawDirections(text string, directions chan<- DrawDirections) {
 			fonts = append(fonts, fontMap{fontPath, fontSubDir.ftype})
 		}
 	}
+
+	mnistSize := 60000 + 10000
+	progress = pb.StartNew(len(fonts)*len(text)*len(fontSizes)*len(movements)*len(movements) + mnistSize)
 
 	for _, font := range fonts {
 		for _, c := range text {
@@ -227,10 +236,11 @@ func imgSaver(counters <-chan Counter) {
 		if err := draw2dimg.SaveToPngFile(path.Join(outDir, fileName), counter.Image.Image); err != nil {
 			fmt.Println(err)
 		}
+		progress.Increment()
 	}
 }
 
-func gobSaver(counters <-chan Counter) {
+func gobSaver(trainFile string, testFile string, counters <-chan Counter) {
 	csvFileTrain, err := os.Create(trainFile)
 	if err != nil {
 		panic(err)
@@ -267,6 +277,7 @@ func gobSaver(counters <-chan Counter) {
 		} else {
 			test.Encode(record)
 		}
+		progress.Increment()
 	}
 }
 
@@ -300,8 +311,9 @@ func drawMnist(images chan<- Image) {
 	}
 }
 
-func generatData(text string) error {
+func GeneratDigits(text string) error {
 	if text == "" {
+		fmt.Println(ErrNoText)
 		return ErrNoText
 	}
 
@@ -326,7 +338,7 @@ func generatData(text string) error {
 	common.RoutineRunner(1, true, func() { drawMnist(images) }, func() { wgProducer.Done() })
 	common.RoutineRunner(1, true, func() { imgCouter(images, counters) }, func() { close(counters) })
 	// common.RoutineRunner(4, false, func() { imgSaver(counters) }, nil)
-	common.RoutineRunner(1, false, func() { gobSaver(counters) }, nil)
+	common.RoutineRunner(1, false, func() { gobSaver(TrainFile, TestFile, counters) }, nil)
 
 	return nil
 }

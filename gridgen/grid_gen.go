@@ -1,8 +1,10 @@
-package grid
+package gridgen
 
 import (
+	"encoding/gob"
 	"fmt"
 	"image"
+	"image/color"
 	"math"
 	"math/rand"
 	"os"
@@ -60,6 +62,12 @@ type Image struct {
 type Counter struct {
 	Image
 	ID int
+}
+
+type GridRecord struct {
+	Pic           [ImageSize * ImageSize]uint8
+	Fragment      FragmentType
+	FragmentSuper FragmentSuperType
 }
 
 var (
@@ -187,6 +195,7 @@ func draw(directions <-chan DrawDirections, images chan<- Image) {
 		digit, err := drawFragment(direction)
 		if err != nil {
 			fmt.Printf("Counld not draw %#v. Err: %s", direction, err.Error())
+			progress.Increment()
 			continue
 		}
 		images <- Image{
@@ -284,6 +293,47 @@ func drawFragment(directions DrawDirections) (img image.Image, err error) {
 	return canvas, nil
 }
 
+func gobSaver(trainFile string, testFile string, counters <-chan Counter) {
+	csvFileTrain, err := os.Create(trainFile)
+	if err != nil {
+		panic(err)
+	}
+	defer csvFileTrain.Close()
+
+	csvFileTest, err := os.Create(testFile)
+	if err != nil {
+		panic(err)
+	}
+	defer csvFileTest.Close()
+
+	train := gob.NewEncoder(csvFileTrain)
+	test := gob.NewEncoder(csvFileTest)
+
+	for counter := range counters {
+		bounds := counter.Image.Image.Bounds()
+		record := GridRecord{
+			Fragment:      counter.GridInfo.Fragment,
+			FragmentSuper: counter.GridInfo.FragmentSuper,
+		}
+
+		pos := 0
+		for x := 0; x < bounds.Max.X; x++ {
+			for y := 0; y < bounds.Max.Y; y++ {
+				clr := counter.Image.Image.At(x, y)
+				grayColor := color.GrayModel.Convert(clr).(color.Gray)
+				record.Pic[pos] = grayColor.Y
+				pos++
+			}
+		}
+		if counter.GridInfo.Train {
+			train.Encode(record)
+		} else {
+			test.Encode(record)
+		}
+		progress.Increment()
+	}
+}
+
 func GenerateSudokuGrid() error {
 	os.RemoveAll(outDir)
 	if err := os.Mkdir(outDir, 0764); err != nil {
@@ -297,7 +347,8 @@ func GenerateSudokuGrid() error {
 	common.RoutineRunner(1, true, func() { prepareDrawDirections(directions) }, func() { close(directions) })
 	common.RoutineRunner(4, true, func() { draw(directions, images) }, func() { close(images) })
 	common.RoutineRunner(1, true, func() { imgCouter(images, counters) }, func() { close(counters) })
-	common.RoutineRunner(4, false, func() { imgSaver(counters) }, nil)
+	// common.RoutineRunner(4, false, func() { imgSaver(counters) }, nil)
+	common.RoutineRunner(1, false, func() { gobSaver(TrainFile, TestFile, counters) }, nil)
 
 	return nil
 }

@@ -4,11 +4,14 @@ import (
 	"errors"
 	"os"
 
-	"github.com/mrfuxi/digit/grid"
+	"github.com/mrfuxi/digit/common"
+	"github.com/mrfuxi/digit/digitgen"
+	"github.com/mrfuxi/digit/digitnet"
+	"github.com/mrfuxi/digit/gridgen"
 	"github.com/urfave/cli"
 )
 
-var ErrInputMissing = errors.New("Input file missing")
+var errInputMissing = errors.New("Input file missing")
 
 func main() {
 	app := cli.NewApp()
@@ -31,15 +34,15 @@ func main() {
 						},
 					},
 					Action: func(c *cli.Context) error {
-						nn := buildNN()
+						nn := digitnet.BuildNN()
 
-						err := load(c.String("input"), nn)
+						err := common.LoadNN(c.String("input"), nn)
 						if err != nil {
 							return err
 						}
 
-						runTraining(nn)
-						save(c.String("output"), nn)
+						digitnet.RunTraining(nn)
+						common.SaveNN(c.String("output"), nn)
 						return nil
 					},
 				},
@@ -53,16 +56,16 @@ func main() {
 						},
 					},
 					Action: func(c *cli.Context) error {
-						nn := buildNN()
+						nn := digitnet.BuildNN()
 						if c.String("input") == "" {
-							return ErrInputMissing
+							return errInputMissing
 						}
 
-						if err := load(c.String("input"), nn); err != nil {
+						if err := common.LoadNN(c.String("input"), nn); err != nil {
 							return err
 						}
 
-						validate(nn)
+						digitnet.Validate(nn)
 						return nil
 					},
 				},
@@ -77,14 +80,14 @@ func main() {
 					Usage: "Digits",
 					Action: func(c *cli.Context) error {
 						text := c.Args().First()
-						return generatData(text)
+						return digitgen.GeneratDigits(text)
 					},
 				},
 				{
 					Name:  "grid",
 					Usage: "Fragments of grid",
 					Action: func(c *cli.Context) error {
-						return grid.GenerateSudokuGrid()
+						return gridgen.GenerateSudokuGrid()
 					},
 				},
 			},

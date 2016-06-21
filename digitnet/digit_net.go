@@ -1,4 +1,4 @@
-package main
+package digitnet
 
 import (
 	"encoding/gob"
@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/mrfuxi/digit/digitgen"
 	"github.com/mrfuxi/neural"
 	"github.com/mrfuxi/neural/mat"
 )
@@ -20,7 +21,7 @@ func prepareMnistData(r io.Reader) (examples []neural.TrainExample) {
 	dec := gob.NewDecoder(r)
 
 	for {
-		tmp := Record{}
+		tmp := digitgen.Record{}
 		err := dec.Decode(&tmp)
 		if err == io.EOF {
 			break
@@ -52,7 +53,7 @@ func prepareMnistData(r io.Reader) (examples []neural.TrainExample) {
 }
 
 func loadTrainData() ([]neural.TrainExample, []neural.TrainExample) {
-	trainFile, err := os.Open(trainFile)
+	trainFile, err := os.Open(digitgen.TrainFile)
 	if err != nil {
 		panic(err)
 	}
@@ -64,7 +65,7 @@ func loadTrainData() ([]neural.TrainExample, []neural.TrainExample) {
 }
 
 func loadTestData() []neural.TrainExample {
-	testFile, err := os.Open(testFile)
+	testFile, err := os.Open(digitgen.TestFile)
 	if err != nil {
 		panic(err)
 	}
@@ -85,31 +86,7 @@ func epocheCallback(nn neural.Evaluator, cost neural.Cost, validationData, testD
 	}
 }
 
-func load(fileName string, nn neural.Evaluator) error {
-	if fileName == "" {
-		return nil
-	}
-
-	fn, err := os.Open(fileName)
-	if err != nil {
-		return err
-	}
-	return neural.Load(nn, fn)
-}
-
-func save(fileName string, nn neural.Evaluator) error {
-	if fileName == "" {
-		return nil
-	}
-
-	fn, err := os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
-	if err != nil {
-		return err
-	}
-	return neural.Save(nn, fn)
-}
-
-func buildNN() neural.Evaluator {
+func BuildNN() neural.Evaluator {
 	activator := neural.NewSigmoidActivator()
 	outActivator := neural.NewSoftmaxActivator()
 	nn := neural.NewNeuralNetwork(
@@ -120,7 +97,7 @@ func buildNN() neural.Evaluator {
 	return nn
 }
 
-func runTraining(nn neural.Evaluator) {
+func RunTraining(nn neural.Evaluator) {
 	fmt.Println("Loading train data")
 	testData := loadTestData()
 	trainData, validationData := loadTrainData()
@@ -146,7 +123,7 @@ func runTraining(nn neural.Evaluator) {
 	fmt.Println("Training complete in", dt)
 }
 
-func validate(nn neural.Evaluator) {
+func Validate(nn neural.Evaluator) {
 	testData := loadTestData()
 	var different float64
 
