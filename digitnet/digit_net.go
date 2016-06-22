@@ -8,9 +8,9 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/mrfuxi/digit/common"
 	"github.com/mrfuxi/digit/digitgen"
 	"github.com/mrfuxi/neural"
-	"github.com/mrfuxi/neural/mat"
 )
 
 var (
@@ -75,17 +75,6 @@ func loadTestData() []neural.TrainExample {
 	return testData
 }
 
-func epocheCallback(nn neural.Evaluator, cost neural.Cost, validationData, testData []neural.TrainExample) neural.EpocheCallback {
-	return func(epoche int, dt time.Duration) {
-		_, validationErrors := neural.CalculateCorrectness(nn, cost, validationData)
-		_, testErrors := neural.CalculateCorrectness(nn, cost, testData)
-		if epoche == 1 {
-			fmt.Println("epoche,validation error,test error")
-		}
-		fmt.Printf("%v,%v,%v\n", epoche, validationErrors, testErrors)
-	}
-}
-
 func BuildNN() neural.Evaluator {
 	activator := neural.NewSigmoidActivator()
 	outActivator := neural.NewSoftmaxActivator()
@@ -110,7 +99,7 @@ func RunTraining(nn neural.Evaluator) {
 		Regularization: 2,
 		Momentum:       0.9,
 		TrainerFactory: neural.NewBackpropagationTrainer,
-		EpocheCallback: epocheCallback(nn, cost, validationData, testData),
+		EpocheCallback: common.EpocheCallback(nn, cost, validationData, testData),
 		Cost:           cost,
 	}
 
@@ -121,20 +110,4 @@ func RunTraining(nn neural.Evaluator) {
 	dt := time.Since(t0)
 
 	fmt.Println("Training complete in", dt)
-}
-
-func Validate(nn neural.Evaluator) {
-	testData := loadTestData()
-	var different float64
-
-	for _, sample := range testData {
-		output := nn.Evaluate(sample.Input)
-
-		if mat.ArgMax(output) != mat.ArgMax(sample.Output) {
-			different++
-		}
-	}
-
-	errorRate := different / float64(len(testData))
-	fmt.Printf("Error rate: %.2f%%\n", errorRate*100)
 }

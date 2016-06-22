@@ -8,12 +8,24 @@ import (
 	"github.com/mrfuxi/digit/digitgen"
 	"github.com/mrfuxi/digit/digitnet"
 	"github.com/mrfuxi/digit/gridgen"
+	"github.com/mrfuxi/digit/gridnet"
 	"github.com/urfave/cli"
 )
 
 var errInputMissing = errors.New("Input file missing")
 
 func main() {
+	netFlags := []cli.Flag{
+		cli.StringFlag{
+			Name:  "input, i",
+			Usage: "Load network from `FILE`",
+		},
+		cli.StringFlag{
+			Name:  "output, o",
+			Usage: "Save network to `FILE`",
+		},
+	}
+
 	app := cli.NewApp()
 	app.Commands = []cli.Command{
 		{
@@ -21,18 +33,9 @@ func main() {
 			Usage: "Training and validating network",
 			Subcommands: []cli.Command{
 				{
-					Name:  "train",
-					Usage: "Run training on the network",
-					Flags: []cli.Flag{
-						cli.StringFlag{
-							Name:  "input, i",
-							Usage: "Load network from `FILE`",
-						},
-						cli.StringFlag{
-							Name:  "output, o",
-							Usage: "Save network to `FILE`",
-						},
-					},
+					Name:  "digit",
+					Flags: netFlags,
+					Usage: "Train digit network",
 					Action: func(c *cli.Context) error {
 						nn := digitnet.BuildNN()
 
@@ -47,25 +50,19 @@ func main() {
 					},
 				},
 				{
-					Name:  "validate",
-					Usage: "Run validation on test data",
-					Flags: []cli.Flag{
-						cli.StringFlag{
-							Name:  "input, i",
-							Usage: "Load network from `FILE`",
-						},
-					},
+					Name:  "grid",
+					Flags: netFlags,
+					Usage: "Train grid network",
 					Action: func(c *cli.Context) error {
-						nn := digitnet.BuildNN()
-						if c.String("input") == "" {
-							return errInputMissing
-						}
+						nn := gridnet.BuildNN()
 
-						if err := common.LoadNN(c.String("input"), nn); err != nil {
+						err := common.LoadNN(c.String("input"), nn)
+						if err != nil {
 							return err
 						}
 
-						digitnet.Validate(nn)
+						gridnet.RunTraining(nn)
+						common.SaveNN(c.String("output"), nn)
 						return nil
 					},
 				},
