@@ -15,12 +15,13 @@ import (
 	"gopkg.in/cheggaaa/pb.v1"
 )
 
-const ImageSize = 50
+const ImageSize = 28
 
 type FragmentType uint8
 
 const (
-	FragmentTypeCornerNW FragmentType = iota
+	FragmentTypeEmpty FragmentType = iota
+	FragmentTypeCornerNW
 	FragmentTypeCornerNE
 	FragmentTypeCornerSE
 	FragmentTypeCornerSW
@@ -29,16 +30,15 @@ const (
 	FragmentTypeEdgeS
 	FragmentTypeEdgeW
 	FragmentTypeCross
-	FragmentTypeEmpty
 )
 
 type FragmentSuperType uint8
 
 const (
-	FragmentSuperTypeCorner FragmentSuperType = iota
+	FragmentSuperTypeEmpty FragmentSuperType = iota
+	FragmentSuperTypeCorner
 	FragmentSuperTypeEdge
 	FragmentSuperTypeCross
-	FragmentSuperTypeEmpty
 )
 
 type GridInfo struct {
@@ -64,7 +64,7 @@ type Counter struct {
 	ID int
 }
 
-type GridRecord struct {
+type Record struct {
 	Pic           [ImageSize * ImageSize]uint8
 	Fragment      FragmentType
 	FragmentSuper FragmentSuperType
@@ -311,7 +311,7 @@ func gobSaver(trainFile string, testFile string, counters <-chan Counter) {
 
 	for counter := range counters {
 		bounds := counter.Image.Image.Bounds()
-		record := GridRecord{
+		record := Record{
 			Fragment:      counter.GridInfo.Fragment,
 			FragmentSuper: counter.GridInfo.FragmentSuper,
 		}
