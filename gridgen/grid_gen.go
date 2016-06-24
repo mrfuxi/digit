@@ -30,6 +30,8 @@ const (
 	FragmentTypeEdgeS
 	FragmentTypeEdgeW
 	FragmentTypeCross
+	FragmentTypeLineH
+	FragmentTypeLineV
 )
 
 type FragmentSuperType uint8
@@ -113,7 +115,25 @@ func IsCross(fragment FragmentType) bool {
 }
 
 func IsEmpty(fragment FragmentType) bool {
-	return fragment == FragmentTypeEmpty
+	if fragment == FragmentTypeEmpty {
+		return true
+	}
+	if IsLine(fragment) {
+		return true
+	}
+
+	return false
+}
+
+func IsLine(fragment FragmentType) bool {
+	switch fragment {
+	case FragmentTypeLineH:
+		return true
+	case FragmentTypeLineV:
+		return true
+	}
+
+	return false
 }
 
 func FragmentTypeToSuper(fragment FragmentType) FragmentSuperType {
@@ -142,7 +162,12 @@ func prepareDrawDirections(directions chan<- DrawDirections) {
 		FragmentTypeEdgeS,
 		FragmentTypeEdgeW,
 		FragmentTypeCross,
+	}
+
+	lineFragments := []FragmentType{
 		FragmentTypeEmpty,
+		FragmentTypeLineH,
+		FragmentTypeLineV,
 	}
 
 	xyMovements := []float64{}
@@ -160,7 +185,25 @@ func prepareDrawDirections(directions chan<- DrawDirections) {
 		}
 	}
 
-	progress = pb.StartNew(len(fragments) * len(dAngle) * len(dAngle) * len(xyMovements) * len(xyMovements))
+	xyMovementsLine := []float64{}
+	for d := 0.0; d <= ImageSize/2.0; d += 2.0 {
+		xyMovementsLine = append(xyMovementsLine, d)
+		if d != 0 {
+			xyMovementsLine = append(xyMovementsLine, -d)
+		}
+	}
+	dAngleLine := []float64{}
+	for d := 0.0; d <= 30; d += 5 {
+		dAngleLine = append(dAngleLine, d, -d)
+		if d != 0 {
+			dAngleLine = append(dAngleLine, -d)
+		}
+	}
+
+	size := len(fragments) * len(dAngle) * len(dAngle) * len(xyMovements) * len(xyMovements)
+	sizeLine := len(lineFragments) * len(dAngleLine) * len(xyMovementsLine) * len(xyMovementsLine)
+
+	progress = pb.StartNew(size + sizeLine)
 
 	for _, fragment := range fragments {
 		for _, ds := range dAngle {
@@ -178,6 +221,25 @@ func prepareDrawDirections(directions chan<- DrawDirections) {
 							Dx:          dx,
 							Dy:          dy,
 						}
+					}
+				}
+			}
+		}
+	}
+
+	for _, fragment := range lineFragments {
+		for _, ds := range dAngleLine {
+			for _, dx := range xyMovementsLine {
+				for _, dy := range xyMovementsLine {
+					directions <- DrawDirections{
+						GridInfo: GridInfo{
+							Fragment:      fragment,
+							FragmentSuper: FragmentTypeToSuper(fragment),
+							Train:         rand.Intn(100) >= 5,
+						},
+						DStartAngle: ds,
+						Dx:          dx,
+						Dy:          dy,
 					}
 				}
 			}
@@ -231,7 +293,7 @@ func drawFragment(directions DrawDirections) (img image.Image, err error) {
 
 	canvas := image.NewRGBA(image.Rect(0, 0, ImageSize, ImageSize))
 
-	if IsEmpty(directions.Fragment) {
+	if directions.Fragment == FragmentTypeEmpty {
 		return canvas, nil
 	}
 
@@ -261,6 +323,11 @@ func drawFragment(directions DrawDirections) (img image.Image, err error) {
 		startAngle = 180
 	case FragmentTypeEdgeW:
 		startAngle = 270
+
+	case FragmentTypeLineH:
+		startAngle = 0
+	case FragmentTypeLineV:
+		startAngle = 90
 	}
 
 	startAngle += directions.DStartAngle
@@ -278,6 +345,10 @@ func drawFragment(directions DrawDirections) (img image.Image, err error) {
 	gc.LineTo(ImageSize, 0)
 	gc.Close()
 	gc.FillStroke()
+
+	if IsLine(directions.Fragment) {
+		return canvas, nil
+	}
 
 	gc.Rotate(diffAngle * math.Pi / 180.0)
 
