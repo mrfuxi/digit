@@ -32,6 +32,9 @@ func prepareGridData(r io.Reader) (examples []neural.TrainExample) {
 		}
 		image := tmp.Pic
 		label := tmp.Fragment
+		if gridgen.IsEmpty(label) {
+			label = gridgen.FragmentTypeEmpty
+		}
 		// label := tmp.FragmentSuper
 
 		example := neural.TrainExample{
@@ -59,8 +62,8 @@ func loadTrainData() ([]neural.TrainExample, []neural.TrainExample) {
 	}
 	defer trainFile.Close()
 	tmp := prepareGridData(trainFile)
-	trainData := tmp[:len(tmp)-5000]
-	validationData := tmp[len(tmp)-5000:]
+	trainData := tmp[:len(tmp)-5]
+	validationData := tmp[len(tmp)-5:]
 	return trainData, validationData
 }
 
@@ -98,10 +101,9 @@ func RunTraining(nn neural.Evaluator) {
 		Epochs:         5,
 		MiniBatchSize:  10,
 		LearningRate:   0.01,
-		Regularization: 4,
+		Regularization: 2,
 		Momentum:       0.9,
-		TrainerFactory: NewRandomizedTrainer,
-		// TrainerFactory: neural.NewBackpropagationTrainer,
+		TrainerFactory: neural.NewBackpropagationTrainer,
 		EpocheCallback: common.EpocheCallback(nn, cost, validationData, testData),
 		Cost:           cost,
 	}
