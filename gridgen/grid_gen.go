@@ -16,6 +16,7 @@ import (
 )
 
 const ImageSize = 28
+const imageCutOff = 5
 
 type FragmentType uint8
 
@@ -171,7 +172,7 @@ func prepareDrawDirections(directions chan<- DrawDirections) {
 	}
 
 	xyMovements := []float64{}
-	for d := 0.0; d <= ImageSize/4.0; d += 2.0 {
+	for d := 0.0; d <= ImageSize/2.0; d += 2.0 {
 		xyMovements = append(xyMovements, d)
 		if d != 0 {
 			xyMovements = append(xyMovements, -d)
@@ -254,15 +255,21 @@ func draw(directions <-chan DrawDirections, images chan<- Image) {
 		if !ok {
 			break
 		}
-		digit, err := drawFragment(direction)
+		img, err := drawFragment(direction)
 		if err != nil {
 			fmt.Printf("Counld not draw %#v. Err: %s", direction, err.Error())
 			progress.Increment()
 			continue
 		}
+
+		if math.Abs(direction.Dx) > imageCutOff || math.Abs(direction.Dy) > imageCutOff {
+			direction.GridInfo.Fragment = FragmentTypeEmpty
+			direction.GridInfo.FragmentSuper = FragmentSuperTypeEmpty
+		}
+
 		images <- Image{
 			GridInfo: direction.GridInfo,
-			Image:    digit,
+			Image:    img,
 		}
 	}
 }
