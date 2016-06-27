@@ -80,10 +80,10 @@ func loadTestData() []neural.TrainExample {
 
 func BuildNN() neural.Evaluator {
 	activator := neural.NewSigmoidActivator()
-	// outActivator := neural.NewSoftmaxActivator()
-	outActivator := neural.NewSigmoidActivator()
+	outActivator := neural.NewSoftmaxActivator()
+	// outActivator := neural.NewSigmoidActivator()
 	nn := neural.NewNeuralNetwork(
-		[]int{inputSize, 100, outputSize},
+		[]int{inputSize, 20, outputSize},
 		neural.NewFullyConnectedLayer(activator),
 		neural.NewFullyConnectedLayer(outActivator),
 	)
