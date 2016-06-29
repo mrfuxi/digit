@@ -129,7 +129,8 @@ func (c *cornerDrawer) Draw(images chan<- Image) {
 								FragmentSuper: FragmentTypeToSuper(fragment),
 								Train:         rand.Intn(100) >= 5,
 							},
-							Image: drawBase(c.drawFragment(fragment, dx, dy, ds, dd)),
+							Image:     drawBase(c.drawFragment(fragment, dx, dy, ds, dd)),
+							OffCenter: math.Max(math.Abs(dx), math.Abs(dy)),
 						}
 					}
 				}
@@ -197,7 +198,8 @@ func (e *edgeDrawer) Draw(images chan<- Image) {
 								FragmentSuper: FragmentTypeToSuper(fragment),
 								Train:         rand.Intn(100) >= 5,
 							},
-							Image: drawBase(e.drawFragment(fragment, dx, dy, ds, dd)),
+							Image:     drawBase(e.drawFragment(fragment, dx, dy, ds, dd)),
+							OffCenter: math.Max(math.Abs(dx), math.Abs(dy)),
 						}
 					}
 				}
@@ -265,7 +267,8 @@ func (c *crossDrawer) Draw(images chan<- Image) {
 							FragmentSuper: FragmentTypeToSuper(fragment),
 							Train:         rand.Intn(100) >= 5,
 						},
-						Image: drawBase(c.drawFragment(dx, dy, ds, dd)),
+						Image:     drawBase(c.drawFragment(dx, dy, ds, dd)),
+						OffCenter: math.Max(math.Abs(dx), math.Abs(dy)),
 					}
 				}
 			}
@@ -317,7 +320,8 @@ func (l *lineDrawer) Draw(images chan<- Image) {
 						FragmentSuper: FragmentTypeToSuper(FragmentTypeEmpty),
 						Train:         rand.Intn(100) >= 5,
 					},
-					Image: drawBase(l.drawFragment(horizontal, move, ds)),
+					Image:     drawBase(l.drawFragment(horizontal, move, ds)),
+					OffCenter: math.Abs(move),
 				}
 			}
 		}
@@ -368,7 +372,8 @@ func (e *emptyDrawer) Draw(images chan<- Image) {
 			FragmentSuper: FragmentTypeToSuper(fragment),
 			Train:         true,
 		},
-		Image: drawBase(e.drawFragment(0)),
+		Image:     drawBase(e.drawFragment(0)),
+		OffCenter: 0,
 	}
 
 	for i := 0; i < e.Samples; i++ {
@@ -378,7 +383,8 @@ func (e *emptyDrawer) Draw(images chan<- Image) {
 				FragmentSuper: FragmentTypeToSuper(fragment),
 				Train:         rand.Intn(100) >= 5,
 			},
-			Image: drawBase(e.drawFragment(e.Noise)),
+			Image:     drawBase(e.drawFragment(e.Noise)),
+			OffCenter: 0,
 		}
 	}
 }
@@ -421,7 +427,8 @@ func (i *incompleteEdgeDrawer) Draw(images chan<- Image) {
 								FragmentSuper: FragmentTypeToSuper(fr),
 								Train:         rand.Intn(100) >= 5,
 							},
-							Image: drawBase(i.drawFragment(fragment, dx, dy, dOff, ds, dd)),
+							Image:     drawBase(i.drawFragment(fragment, dx, dy, dOff, ds, dd)),
+							OffCenter: math.Max(math.Max(math.Abs(dx), math.Abs(dy)), math.Abs(dOff)),
 						}
 
 					}

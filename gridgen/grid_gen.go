@@ -20,12 +20,12 @@ type GridInfo struct {
 	Fragment      FragmentType
 	FragmentSuper FragmentSuperType
 	Train         bool
-	OffCenter     float64
 }
 
 type Image struct {
 	GridInfo
-	Image image.Image
+	Image     image.Image
+	OffCenter float64
 }
 
 type Counter struct {
@@ -184,8 +184,8 @@ func GenerateSudokuGrid() error {
 	common.RoutineRunner(1, true, func() { prepareMeta(drawers) }, func() { close(drawers) })
 	common.RoutineRunner(4, true, func() { drawWithDrawer(drawers, images) }, func() { close(images) })
 	common.RoutineRunner(1, true, func() { imgCouter(images, counters) }, func() { close(counters) })
-	common.RoutineRunner(4, false, func() { imgSaver(counters) }, nil)
-	// common.RoutineRunner(1, false, func() { gobSaver(TrainFile, TestFile, counters) }, nil)
+	// common.RoutineRunner(4, false, func() { imgSaver(counters) }, nil)
+	common.RoutineRunner(1, false, func() { gobSaver(TrainFile, TestFile, counters) }, nil)
 
 	return nil
 }
